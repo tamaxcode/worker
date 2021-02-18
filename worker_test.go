@@ -37,7 +37,7 @@ func Test_Stop(t *testing.T) {
 
 	c := 0
 	mtx := sync.Mutex{}
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 100; i++ {
 		collector.AddWork(Work{
 			Handler: func() {
 				mtx.Lock()
@@ -50,20 +50,12 @@ func Test_Stop(t *testing.T) {
 		})
 	}
 
-	done := make(chan bool)
-
 	go func() {
-		collector.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	default:
 		time.Sleep(1 * time.Second)
 		collector.Stop()
-		break
-	}
+	}()
+
+	collector.Wait()
 
 	if c != 1 {
 		t.Errorf("Count Want: 1, Got: %d\n", c)

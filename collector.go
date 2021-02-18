@@ -12,6 +12,7 @@ type Collector struct {
 	wg      *sync.WaitGroup
 	ctx     context.Context
 
+	wgCount int
 	stopper func()
 }
 
@@ -52,6 +53,7 @@ func NewCollector(configs ...*Config) *Collector {
 	})
 */
 func (c *Collector) AddWork(work Work) {
+	c.wgCount++
 	c.wg.Add(1)
 
 	go func() {
@@ -67,4 +69,7 @@ func (c *Collector) Wait() {
 // Stop all ongoing task
 func (c *Collector) Stop() {
 	c.stopper()
+	for i := 0; i < c.wgCount; i++ {
+		c.wg.Done()
+	}
 }
