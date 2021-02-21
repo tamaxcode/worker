@@ -29,10 +29,9 @@ func Test_Run(t *testing.T) {
 
 func Test_Stop(t *testing.T) {
 
-	n := 2
-	collector := NewCollector(&Config{
-		NoOfWorkers: &n,
-	})
+	cfg := &Config{}
+	cfg.SetNoOfWorkers(2)
+	collector := NewCollector(cfg)
 
 	c := 0
 	mtx := sync.Mutex{}
