@@ -3,7 +3,6 @@ package worker
 import (
 	"sync"
 	"testing"
-	"time"
 )
 
 func Test_Run(t *testing.T) {
@@ -30,7 +29,7 @@ func Test_Run(t *testing.T) {
 
 func Test_Stop(t *testing.T) {
 
-	n := 1
+	n := 2
 	collector := NewCollector(&Config{
 		NoOfWorkers: &n,
 	})
@@ -41,28 +40,26 @@ func Test_Stop(t *testing.T) {
 		collector.AddWork(Work{
 			Handler: func() {
 				mtx.Lock()
-				c++
-				mtx.Unlock()
+				defer mtx.Unlock()
 
-				// simulate heavy work
-				time.Sleep(10 * time.Second)
+				if c == 2 {
+					collector.Stop()
+					return
+				}
+
+				c++
 			},
 		})
 	}
 
-	go func() {
-		time.Sleep(1 * time.Second)
-		collector.Stop()
-	}()
-
 	collector.Wait()
 
-	if c != 1 {
-		t.Errorf("Count Want: 1, Got: %d\n", c)
+	if c != 2 {
+		t.Errorf("Count Want: 2, Got: %d\n", c)
 	}
 }
 
-func Benchmark_Run(b *testing.B) {
+func Benchmark_Run1000(b *testing.B) {
 	collector := NewCollector()
 
 	c := 0
