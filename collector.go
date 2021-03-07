@@ -2,35 +2,60 @@ package worker
 
 import (
 	"context"
+	"runtime"
 	"sync"
 )
+
+// Config represent configuration setting for collector to send received task to worker
+type Config struct {
+	// Number of worker spawn to handle concurrent work. Default to "runtime.NumCPU"
+	// giving value <= 0 will fallback to default value
+	NoOfWorkers int
+	Handler     func(data interface{}) bool
+}
 
 // Collector will communicate with outer layer to receive handler for worker to process task
 type Collector struct {
 	workers []*Worker
-	work    chan<- Work
+	work    chan<- interface{}
 	wg      *sync.WaitGroup
 	ctx     context.Context
 
-	stopper func()
+	stopChan <-chan bool
+	stopper  func()
 }
 
 // NewCollector ...
-func NewCollector(configs ...*Config) *Collector {
+func NewCollector(config Config) *Collector {
 
 	ctx, canc := context.WithCancel(context.Background())
-	cfg := mergeOrDefault(configs)
 
+	noOfWorkers := config.NoOfWorkers
+	if noOfWorkers <= 0 {
+		noOfWorkers = runtime.NumCPU()
+	}
+
+	workers := make([]*Worker, noOfWorkers)
+
+	inputChannel := make(chan interface{}, noOfWorkers)
 	wg := sync.WaitGroup{}
 
-	inputChannel := make(chan Work)
-	workers := make([]*Worker, 0)
+	stopChan := make(chan bool)
 
-	for i := 0; i < *cfg.NoOfWorkers; i++ {
-		w := createWorker(ctx, inputChannel, &wg)
+	for i := 0; i < noOfWorkers; i++ {
+		w := Worker{
+			id:  i,
+			ctx: ctx,
+
+			workHandler: config.Handler,
+			workChannel: inputChannel,
+			wg:          &wg,
+
+			stopChannel: stopChan,
+		}
 		w.Start()
 
-		workers = append(workers, w)
+		workers[i] = &w
 	}
 
 	return &Collector{
@@ -38,25 +63,22 @@ func NewCollector(configs ...*Config) *Collector {
 		workers: workers,
 		wg:      &wg,
 
-		ctx:     ctx,
-		stopper: canc,
+		ctx:      ctx,
+		stopChan: stopChan,
+		stopper:  canc,
 	}
 }
 
-// AddWork ...
+// Add ...
 // Example
 /*
-	Collector.AddWork(Work{
-		Handler: func() {
-			SomeHandler(someData)
-		}
-	})
+	Collector.Add(somedata)
 */
-func (c *Collector) AddWork(work Work) {
+func (c *Collector) Add(data interface{}) {
 	c.wg.Add(1)
 
 	go func() {
-		c.work <- work
+		c.work <- data
 	}()
 }
 
@@ -72,6 +94,9 @@ func (c *Collector) Wait() {
 
 	case <-c.ctx.Done():
 		// context cancelled
+	case <-c.stopChan:
+		// worker abort
+		c.stopper()
 	case <-done:
 		// wait group complete
 	}

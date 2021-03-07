@@ -3,8 +3,6 @@ package worker
 import (
 	"context"
 	"sync"
-
-	"github.com/google/uuid"
 )
 
 // Work will bring task handler for worker to call
@@ -12,33 +10,30 @@ type Work struct {
 	Handler WorkHandler
 }
 
-// WorkHandler function that will be called by the worker
+// WorkHandler function that will be called by the worker to process incoming work data
+// will terminate all pending work if return false
 // example
 /*
-	handler := func () {
-		Handler(someData)
+	handler := func (data interface{}) bool {
+		str, _ := data.(string)
+
+		fmt.Println(str)
+
+		return true
 	}
 */
-type WorkHandler func()
+type WorkHandler func(data interface{}) bool
 
 // Worker ...
 type Worker struct {
-	id  string
+	id  int
 	ctx context.Context
 
-	task <-chan Work
-	wg   *sync.WaitGroup
-}
+	workHandler func(data interface{}) bool
+	workChannel <-chan interface{}
+	wg          *sync.WaitGroup
 
-func createWorker(ctx context.Context, taskChannel <-chan Work, wg *sync.WaitGroup) *Worker {
-	id := uuid.NewString()
-
-	return &Worker{
-		id:   id,
-		ctx:  ctx,
-		task: taskChannel,
-		wg:   wg,
-	}
+	stopChannel chan<- bool
 }
 
 // Start ...
@@ -46,21 +41,30 @@ func (w *Worker) Start() {
 
 	go func() {
 		for {
-			var handler WorkHandler
+			var (
+				workData interface{}
+			)
 
 			select {
 			case <-w.ctx.Done():
 				// context canceled, stop worker
 				return
-			case work, ok := <-w.task:
+			case work, ok := <-w.workChannel:
 				if !ok {
 					// channel closed, stop worker
 					return
 				}
-				handler = work.Handler
+				workData = work
 			}
 
-			handler()
+			cont := true
+			if w.workChannel != nil {
+				cont = w.workHandler(workData)
+			}
+
+			if cont == false {
+				w.stopChannel <- true
+			}
 
 			w.wg.Done()
 		}
