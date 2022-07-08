@@ -7,17 +7,17 @@ import (
 )
 
 // Config represent configuration setting for collector to send received task to worker
-type Config struct {
+type Config[T any] struct {
 	// Number of worker spawn to handle concurrent work. Default to "runtime.NumCPU"
 	// giving value <= 0 will fallback to default value
 	NoOfWorkers int
-	Handler     func(data interface{}) bool
+	Handler     func(data T) bool
 }
 
 // Collector will communicate with outer layer to receive handler for worker to process task
-type Collector struct {
-	workers []*Worker
-	work    chan<- interface{}
+type Collector[T any] struct {
+	workers []*Worker[T]
+	work    chan<- T
 	wg      *sync.WaitGroup
 	ctx     context.Context
 
@@ -26,7 +26,7 @@ type Collector struct {
 }
 
 // NewCollector ...
-func NewCollector(config Config) *Collector {
+func NewCollector[T any](config Config[T]) *Collector[T] {
 
 	ctx, canc := context.WithCancel(context.Background())
 
@@ -35,15 +35,15 @@ func NewCollector(config Config) *Collector {
 		noOfWorkers = runtime.NumCPU()
 	}
 
-	workers := make([]*Worker, noOfWorkers)
+	workers := make([]*Worker[T], noOfWorkers)
 
-	inputChannel := make(chan interface{}, noOfWorkers)
+	inputChannel := make(chan T, noOfWorkers)
 	wg := sync.WaitGroup{}
 
 	stopChan := make(chan bool)
 
 	for i := 0; i < noOfWorkers; i++ {
-		w := Worker{
+		w := Worker[T]{
 			id:  i,
 			ctx: ctx,
 
@@ -58,7 +58,7 @@ func NewCollector(config Config) *Collector {
 		workers[i] = &w
 	}
 
-	return &Collector{
+	return &Collector[T]{
 		work:    inputChannel,
 		workers: workers,
 		wg:      &wg,
@@ -74,7 +74,7 @@ func NewCollector(config Config) *Collector {
 /*
 	Collector.Add(somedata)
 */
-func (c *Collector) Add(data interface{}) {
+func (c *Collector[T]) Add(data T) {
 	c.wg.Add(1)
 
 	go func() {
@@ -83,7 +83,7 @@ func (c *Collector) Add(data interface{}) {
 }
 
 // Wait until all task completed
-func (c *Collector) Wait() {
+func (c *Collector[T]) Wait() {
 	done := make(chan bool)
 	go func() {
 		c.wg.Wait()
@@ -103,6 +103,6 @@ func (c *Collector) Wait() {
 }
 
 // Stop all ongoing task
-func (c *Collector) Stop() {
+func (c *Collector[T]) Stop() {
 	c.stopper()
 }

@@ -6,8 +6,8 @@ import (
 )
 
 // Work will bring task handler for worker to call
-type Work struct {
-	Handler WorkHandler
+type Work[T any] struct {
+	Handler WorkHandler[T]
 }
 
 // WorkHandler function that will be called by the worker to process incoming work data
@@ -22,27 +22,27 @@ type Work struct {
 		return true
 	}
 */
-type WorkHandler func(data interface{}) bool
+type WorkHandler[T any] func(data T) bool
 
 // Worker ...
-type Worker struct {
+type Worker[T any] struct {
 	id  int
 	ctx context.Context
 
-	workHandler func(data interface{}) bool
-	workChannel <-chan interface{}
+	workHandler WorkHandler[T]
+	workChannel <-chan T
 	wg          *sync.WaitGroup
 
 	stopChannel chan<- bool
 }
 
 // Start ...
-func (w *Worker) Start() {
+func (w *Worker[T]) Start() {
 
 	go func() {
 		for {
 			var (
-				workData interface{}
+				workData T
 			)
 
 			select {
