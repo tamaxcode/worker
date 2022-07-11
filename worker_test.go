@@ -8,7 +8,7 @@ import (
 func Test_Run(t *testing.T) {
 	c := 0
 	mtx := sync.Mutex{}
-	fn := func(_ interface{}) bool {
+	var fn WorkHandler[string] = func(_ string) bool {
 		mtx.Lock()
 		c++
 		mtx.Unlock()
@@ -16,12 +16,12 @@ func Test_Run(t *testing.T) {
 		return true
 	}
 
-	collector := NewCollector(Config{
+	collector := NewCollector(Config[string]{
 		Handler: fn,
 	})
 
 	for i := 0; i < 1000; i++ {
-		collector.Add(nil)
+		collector.Add("")
 	}
 
 	collector.Wait()
@@ -40,9 +40,8 @@ func Test_Concurrent(t *testing.T) {
 		i int
 	}
 
-	collector := NewCollector(Config{
-		Handler: func(data interface{}) bool {
-			p, _ := data.(payload)
+	collector := NewCollector(Config[payload]{
+		Handler: func(p payload) bool {
 
 			got[p.i] = p.n
 
@@ -72,7 +71,7 @@ func Test_Worker_Stop(t *testing.T) {
 
 	c := 0
 	mtx := sync.Mutex{}
-	fn := func(data interface{}) bool {
+	var fn WorkHandler[string] = func(data string) bool {
 		mtx.Lock()
 		defer mtx.Unlock()
 
@@ -85,13 +84,13 @@ func Test_Worker_Stop(t *testing.T) {
 		return true
 	}
 
-	collector := NewCollector(Config{
+	collector := NewCollector(Config[string]{
 		NoOfWorkers: 2,
 		Handler:     fn,
 	})
 
 	for i := 0; i < 100; i++ {
-		collector.Add(nil)
+		collector.Add("")
 	}
 
 	collector.Wait()
@@ -105,8 +104,8 @@ func Benchmark_Run1000(b *testing.B) {
 	c := 0
 	mtx := sync.Mutex{}
 
-	collector := NewCollector(Config{
-		Handler: func(data interface{}) bool {
+	collector := NewCollector(Config[string]{
+		Handler: func(data string) bool {
 			mtx.Lock()
 			c++
 			mtx.Unlock()
@@ -116,7 +115,7 @@ func Benchmark_Run1000(b *testing.B) {
 	})
 
 	for i := 0; i < 1000; i++ {
-		collector.Add(nil)
+		collector.Add("")
 	}
 
 	collector.Wait()
